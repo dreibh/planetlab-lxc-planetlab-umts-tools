@@ -1,0 +1,135 @@
+========================================================================
+3G-UMTS-TOOLS
+========================================================================
+
+These tools give to users of a sliver the possibility to control a PPP
+connection over a 3G umts/hsdpa interface and set the kernel routes
+required to use it. Exploiting vsys features, they make use of wvdial,
+gcom and iproute2 wich require super user privileges. The scenario is
+that of a Onelab node with a primary, usually ethernet, interface, and
+a secondary 3G umts/hsdpa interface, where the primary interface is
+meant to be used for control data (i.e. to log into the sliver), and
+the 3G umts/hsdpa interface for the experiments.
+
+The users of the selected slivers can start, stop and see the status
+of the PPP connection over the 3G umts/hsdpa interface; they can also
+specify for which destinations they want their packets (packets
+generated inside their sliver) to be routed through the 3G umts/hsdpa
+interface. Please note that another method to have packets routed in
+the 3G umts/hsdpa interface is to force the application to bind to
+thse IP of that interface, as afterwards explained.
+
+========================================================================
+INSTALLATION
+
+Copy the file umts in the sliver filesystem (in a directory contained
+in the PATH variable).
+
+
+========================================================================
+USAGE
+
+To start the PPP connection type as root in the guest system:
+
+  umts start
+
+The output will show the ip address of the PPP connection just established, 
+if everything went well.
+
+To stop the PPP connection:
+
+  umts stop
+
+The output will show the connection time, if the PPP connection is 
+successfully stopped.
+
+To check whether the PPP connection is still on (if the PPP link is still
+alive):
+
+  umts status
+
+The answer is either Connected or Disconnected.
+
+To add a destination (packets directed towards this destination will go out 
+of the node through the ppp interface):
+
+  umts add network_address/netmask
+
+The answer is OK if everything went well.
+
+To del a destination previously added:
+
+  umts del network_address/netmask
+
+The answer is OK if everything went well.
+
+
+========================================================================
+WHAT THE BACKEND DOES
+
+When the user issues the command "umts start" a program that runs in
+the host context (the back-end) executes the programs gcom and wvdial,
+and verifies if the 3G umts/hsdpa connection was properly established
+and a ppp device was created. In such a case, it adds a rule into the
+routing table in order to let all the packets having source IP address
+equal to that of the 3G umts/hsdpa interface to be routed through such
+interface. In this way, it is possible to use the 3G umts/hsdpa
+connection by forcing the required application to bind to the IP of
+the related interface (e.g. with wget it is possible to use the
+--bind-address <ip> option). After the creation of the rule, the
+back-end program communicates to the front-end one that everything has
+gone all right. The user in the slice will then see an “OK” on the
+standard output. From this moment until the disconnection (see below),
+upon issuing the “ifconfig” command it should be possible to see a
+network interface called ppp0.
+
+When the user issues the command "umts add <ip_address/netmask>" the
+backend creates a route towards the <ip_address/netmask> specifying
+the 3g umts/hsdpa interface as a gateway, so that all packets directed
+toward such destinations will be routed through the 3g umts/hsdpa
+interface. The related "umts del" command, deletes the route
+previously added.
+
+"umts stop" makes the backend stop the connection (a SIGTERM signal is
+sent to wvdial).
+
+"umts status" makes the backend chech the status of the ppp
+connection. The connection is considered alive if wvdial is still
+running.
+
+
+========================================================================
+VSYS AND PLANETLAB-UMTS-TOOLS
+
+The communication between the sliver and the host environment of the
+node is made possible by vsys, a software created by PlanetLab
+developer Sapan Bhatia to allow PlanetLab users execute privileged
+commands in a normal sliver. The mechanism is meant to be safe, as it
+allows only a predetermined set of executable files to be invoked in
+the unprivileged context. vsys services are executable files placed in
+a specific directory in the root context. Slices that subscribe to
+these services are assigned a pair of FIFO pipes for each available
+service. These pipes respectively become the input and output channels
+to communicate with the service. By developing custom back-end
+(i.e. programs located and running in the root context) and front-end
+(i.e. programs located and running in the slice context) the developer
+provides normal users a set of hooks to execute privileged operations.
+
+We developed a pair of C programs acting as a vsys front-end (“umts”)
+and back-end (“umts_backend”). These two programs communicate by means
+of the pipes created by vsys. “umts” runs in the guest environment and
+writes in one of these two pipes; “umts_backend”, in its turn, reads
+the “umts” command and performs the requested operation, by executing
+a bash script (“umts.sh”).
+
+
+========================================================================
+AUTHORS:
+
+Giovanni Di Stasi <giovanni.distasi@unina.it>
+Alessio Botta <a.botta@unina.it>
+Roberto Canonico <roberto.canonico@unina.it>
+
+Comics Research Group
+University of Naples Federico II
+Naples, Italy

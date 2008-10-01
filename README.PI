@@ -1,0 +1,29 @@
+========================================================================
+NODE CONFIGURATION
+========================================================================
+
+This guide explains how to setup a Onelab node to support a 3G
+umts/hsdpa interface.
+
+First, you have to add your  node to the nodegroup "umts" [1]. In this
+way the  host environment  of the  node will get  the tools  needed to
+manage the  3G umts/hsdpa  interface. Then, you  have to add  the vsys
+attribute to the sliver you want to grant the access to the umts/hsdpa
+interface.  The value  of this  attribute ("vsys")  has to  be  set to
+"umts_backend"
+
+Please read README.user for further explanations on how the 3G
+umts/hsdpa interface is supported.
+
+
+[1] At the moment this can only be done by calling the
+PlanetLab/Onelab APIs; however we provided a python script (called
+add_to_nodegroup.py) that can be used to do this operation automatically.
+
+========================================================================
+SUPPORTED CARDS
+
+At present the Globetrotter 3G/HSDPA and MERLIN U530 UMTS PCMCIA are
+supported.  Every other card supported by the nozomi driver, or by the
+serial_cs drivers, should work as well.
+
