@@ -1,3 +1,5 @@
+%define module_taglevel_varname release
+
 %define name planetlab-umts-tools
 %define version 0.4
 %define release 1
