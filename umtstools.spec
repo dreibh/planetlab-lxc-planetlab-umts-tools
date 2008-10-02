@@ -2,13 +2,13 @@
 %define version 0.4
 %define release 1
 
-Summary: Umts-tools for PlanetLab
+Summary: UMTS tools for PlanetLab
 Name: %{name}
 Version: %{version}
 Release: %{release}
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
-Vendor: Università Federico II di Napoli for Onelab
+Vendor: Universita Federico II di Napoli for Onelab
 Group: Utilities
 URL: http://www.unina.it
 License: GPL
