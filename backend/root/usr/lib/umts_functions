@@ -1,0 +1,383 @@
+#!/bin/bash
+
+
+PPPD_PIDFILE=/var/run/umts_pppd.pid
+
+PPPD=pppd
+
+STROK="remote IP address"
+
+PPP_INT=ppp0
+
+GCOM=""
+
+LOGF="/tmp/umtslogs"
+
+DESTS_FILE="/tmp/umts_dest_file"
+
+FILE_TEMP_NID="/tmp/umts_temp_nid"
+
+FILE_UMTS_INT="/var/run/umts_int"
+
+
+function set_umts_dev(){
+	echo $1 > $FILE_UMTS_INT
+}
+
+function get_umts_dev(){
+	cat $FILE_UMTS_INT
+}
+
+
+function start_gcom(){
+    if ! $GCOM -d `get_umts_dev`; then
+	return 1;
+    fi
+
+    return 0
+}
+
+function init(){
+	local found=1
+
+	modprobe nozomi
+	modprobe serial_cs
+
+	if [ -f /usr/bin/gcom ]; then 
+		GCOM=/usr/bin/gcom
+    	elif [ -f /usr/bin/comgt ]; then
+		GCOM=/usr/bin/comgt
+    	else
+		echo "I couldn't find gcom"
+    		return 1;
+    	fi
+
+	for i in /dev/umts_modem /dev/umts_modem1; do	
+		echo "Testing if the umts interface is present on the device $i..."
+		if $GCOM -d $i; then
+			found=0
+			set_umts_dev $i 
+			break
+		fi	
+	done 
+	
+	if ! [  $found == 0 ]; then
+		echo "I couldn't find the umts device; make a symlink from it to /dev/umts_modem"
+		return 1
+	fi
+
+	if ! grep umts_table /etc/iproute2/rt_tables > /dev/null 2>&1; then
+		echo "20 umts_table" >> /etc/iproute2/rt_tables
+	fi
+
+	return 0
+
+}
+
+
+
+
+function get_temp_nid(){
+	cat $FILE_TEMP_NID
+}
+
+
+function workaround_on(){
+	local sliver_nid=$1
+	local temp_nid=$2
+
+	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
+	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
+	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+
+#	iptables -t mangle -D POSTROUTING -j MARK --copy-xid 0x00
+#	iptables -t mangle -I POSTROUTING 1 ! -p icmp -j MARK --copy-xid 0x00 
+
+}
+
+function workaround_off(){
+	local sliver_nid=$1
+	local temp_nid=$2
+
+	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
+	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
+	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+
+#	iptables -t mangle -I POSTROUTING 1 -j MARK --copy-xid 0x00
+#	iptables -t mangle -D POSTROUTING ! -p icmp -j MARK --copy-xid 0x00 
+}
+
+#called when the connection is up
+function conn_on(){
+	local sliver=$1
+	local sliver_nid=$2
+
+	#add_interface $1
+	rm -f $DESTS_FILE 
+
+	touch $DESTS_FILE > /dev/null 2>&1
+
+	
+	set_temp_nid $sliver_nid
+	local temp_nid=`get_temp_nid`
+
+	set_routes $sliver
+
+
+	workaround_on $sliver_nid $temp_nid
+
+	cat $LOGF | grep "local"
+	return 0
+
+}
+
+#called when the connection is down
+function conn_off(){
+	local sliver=$1
+	local sliver_nid=$2
+
+	temp_nid=`get_temp_nid`
+	workaround_off  $sliver_nid $temp_nid
+
+	unset_routes $sliver
+
+}
+
+function start_umts(){
+    local sliver=$1
+    local sliver_nid=`get_nid $sliver`
+   
+    
+    if status_umts; then
+	 echo "Already connected"
+	 return 0; 
+    fi
+
+    if ! [ -c `get_umts_dev` ]; then
+	echo "Umts interface not present"
+	return 1
+    fi
+
+    rm -f $LOGF
+
+    exec /usr/sbin/pppd nodetach `get_umts_dev` 460800 \
+        	0.0.0.0:0.0.0.0 \
+        	connect "/usr/sbin/chat -v                     \
+        	TIMEOUT         6                              \
+        	ABORT           '\nBUSY\r'                     \
+        	ABORT           '\nNO ANSWER\r'                \
+        	ABORT           '\nRINGING\r\n\r\nRINGING\r'   \
+        	''              ATZ     OK 'ATQ0 V1 E1 S0=0 &C1 &D2 +FCLASS=0' OK  \
+        	ATD*99***1#    CONNECT ''" > $LOGF &
+
+    echo $! > $PPPD_PIDFILE
+
+    	
+    sleep 5s;  #waiting for the interface to establish the link
+    if grep "$STROK" $LOGF >/dev/null 2>&1; then
+	
+	conn_on $sliver $sliver_nid
+    else
+	#second try
+	sleep 4s;
+	if grep "$STROK" $LOGF >/dev/null 2>&1; then
+	    conn_on $sliver $sliver_nid
+	else
+	    stop_umts $sliver
+	    return 1
+	fi
+    fi
+}
+
+
+
+
+function stop_umts(){
+    local sliver=$1
+
+    if ! [ -e $PPPD_PIDFILE ]; then 
+	echo "Disconnected"
+	return 0;
+    fi
+
+    PID=`cat $PPPD_PIDFILE`;
+
+    if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then 	
+	#del_interface $1;
+	conn_off $sliver `get_nid $sliver`
+	kill $PID;
+	sleep 5;
+    fi
+
+    if status_umts; then
+	return 1;
+    else
+	cat $LOGF | grep "time"
+	rm $PPPD_PIDFILE
+	return 0
+    fi
+}
+
+
+function status_umts(){
+
+    if ! [ -e $PPPD_PIDFILE ]; then return 1; fi
+
+    PID=`cat $PPPD_PIDFILE`
+
+    if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then
+	return 0;
+    else 
+	return 1;
+    fi
+}
+
+#add the ppp interface from the slice - not used at the moment
+function add_interface(){
+    local nid=`get_nid $1`
+    $NADDRESS --add --nid $nid --ip $PPP_INT >>$LOGFILE 2>&1;
+}
+
+#remove the ppp interface from the slice - not used at the moment
+function del_interface(){
+    #not working yet because of naddress incompleteness
+    local nid=`get_nid $1`
+    #$NADDRESS --remove --nid $NID --ip $PPP_INT >>$LOGFILE 2>&1;
+}
+
+#get slice network id needed by naddress
+function get_nid(){
+    #NIDFILE="/usr/local/etc/vservers/${1}/context"
+    #cat $NIDFILE
+    id -u ${1}
+}
+
+#enable the explicit bind to the ppp interface
+function set_routes(){
+	local sliver=$1
+	local sliver_nid=`get_nid $sliver`
+	PPP_ADDR=`get_ppp_address`
+
+
+	ip route flush table umts_table >/dev/null 2>&1 
+
+	# OLD ip rule add from $PPP_ADDR fwmark $sliver_nid table umts_table >/dev/null 2>&1
+	ip rule add from $PPP_ADDR fwmark `get_temp_nid` table umts_table >/dev/null 2>&1
+
+	ip route add default dev $PPP_INT src `get_ppp_address` table umts_table >/dev/null 2>&1
+	ip route flush cache  >/dev/null 2>&1
+}
+
+#disable the explicit bind to the ppp interface
+function unset_routes(){
+	local sliver=$1
+	local sliver_nid=`get_nid $sliver`
+	local ppp_addr=`get_ppp_address`
+
+	ip rule del from $ppp_addr fwmark `get_temp_nid` table umts_table  >/dev/null 2>&1
+	ip route del default dev $PPP_INT  src `get_ppp_address` table umts_table >/dev/null 2>&1
+	ip route flush cache  >/dev/null 2>&1
+
+	for i in `cat $DESTS_FILE`; do
+		del_destination $i $sliver > /dev/null 2>&1
+	done
+
+	rm $DESTS_FILE >/dev/null 2>&1
+
+}
+
+function add_destination(){
+	local dest="$1"
+	local sliver=$2
+	
+	local sliver_nid=`get_nid $sliver`
+
+	local temp_nid=`get_temp_nid`
+
+	if [[ ! $dest ]]; then return 1; fi
+
+	if ! status_umts; then
+		return 1;
+	fi
+	
+	#old - if ip route add to "$dest" dev $PPP_INT >/dev/null 2>&1  ;  then
+	if ip rule add to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
+		echo "$dest" >> $DESTS_FILE
+		return 0
+	else 
+		return 1	
+	fi
+	ip route flush cache  >/dev/null 2>&1
+}
+
+function del_destination(){
+	local dest="$1"
+	local sliver=$2
+
+	local sliver_nid=`get_nid $sliver`
+
+	local temp_nid=`get_temp_nid`
+
+	if [[ ! $dest ]]; then return 1; fi
+	#old - if ip route del to "$dest" dev $PPP_INT >/dev/null 2>&1; then
+	if ip rule del to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
+		return 0;
+	else 
+		return 1;
+	fi
+	ip route flush cache  >/dev/null 2>&1
+}
+
+
+function get_ppp_address(){
+	ifconfig $PPP_INT | grep inet\ addr | cut -d ":" -f 2 | cut -d " " -f 1
+}
+
+function set_temp_nid(){
+	local sliver_nid=$1
+	temp_nid=$((0x20000+$sliver_nid))
+	#k=0
+
+	#FIXME
+	#temp_nid=$sliver_nid
+	
+	#while grep :$temp_nid: /etc/passwd; do
+	#	temp_nid=$((temp_nid+1))
+	#	k=$((k+1))
+	#	if [[ $k == 1000 ]]; then
+	#		logger "Fatal error: I couldn't find a temp_nid"
+	#		stop_umts
+	#		exit 1
+	#	fi
+	#done
+
+	echo $temp_nid > $FILE_TEMP_NID
+
+
+}
+
+
+function valid_dotted_quad(){
+    oldIFS=$IFS
+    IFS=.
+    set -f
+    set -- $1
+    if [ $# -eq 4 ]
+    then
+      for seg
+      do
+        case $seg in
+            ""|*[!0-9]*) return 1; break ;; ## Segment empty or non-numeric char
+            *) [ $seg -gt 255 ] && return 2 ;;
+        esac
+      done
+    else
+      return 3 ## Not 4 segments
+    fi
+    IFS=$oldIFS
+    set +f
+    return 0;
+}
+

@@ -22,9 +22,8 @@ thse IP of that interface, as afterwards explained.
 ========================================================================
 INSTALLATION
 
-Copy the file umts in the sliver filesystem (in a directory contained
-in the PATH variable).
-
+Install the planetlab-umts-tools-VERSION.rpm package into the slice
+environment.
 
 ========================================================================
 USAGE

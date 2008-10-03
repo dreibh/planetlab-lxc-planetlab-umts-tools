@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# adds a node to a nodegroup - to be called with an argument (the ip or hostname of the plc)
+# remove a node from nodegroup - to be called with an argument (the ip or hostname of the plc)
 
 import sys
 import xmlrpclib
@@ -20,8 +20,7 @@ plc_ip=sys.argv[1]
 
 
 user = raw_input('Insert your user:')
-#password= getpass('Insert your password:')
-password = raw_input('Insert your password:')
+password= getpass.getpass('Insert your password:')
 hostname = raw_input('Insert the node hostname:')
 nodegroup=raw_input('Insert the group:')
 
@@ -41,7 +40,7 @@ authorized = plc.AuthCheck(auth)
 if authorized:
 	print 'We are authorized!'
 	
-node_fields = {'nodegroups' : [nodegroup] }
+node_fields = {'nodegroups' : [] }
 
 nodes = plc.GetNodes(auth, hostname, ['node_id'])
 
@@ -56,5 +55,5 @@ if len(nodes)==0:
 node_id=nodes[0]['node_id']
 
 if plc.UpdateNode (auth, node_id, node_fields) != 1:
-	print "Couldn't set the nodegroup - error in UpdateNode api";
+	print "Couldn't remove from nodegroup - error in UpdateNode api";
 

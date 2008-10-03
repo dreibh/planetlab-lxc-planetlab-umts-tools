@@ -1,6 +1,6 @@
 %define module_taglevel_varname release
 
-%define name planetlab-umts-tools
+%define name planetlab-umts-tools-frontend
 %define version 0.4
 %define release 1
 
@@ -25,7 +25,7 @@ Frontend part of a program that allows users of a slice to control a PPP connect
 
 %build
 rm -rf $RPM_BUILD_ROOT
-make
+make 
 
 %install
 rm -rf $RPM_BUILD_ROOT

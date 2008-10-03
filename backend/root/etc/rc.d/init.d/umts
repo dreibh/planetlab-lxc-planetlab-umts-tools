@@ -1,0 +1,22 @@
+#!/bin/bash
+# chkconfig: - 87 30
+# description: Loads modules needed for the umts connection and uses gcom
+
+. /usr/lib/umts_functions
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+
+case "$1" in
+    start)
+	echo "Initializing the umts component..."
+	if init ; then echo "Done."; fi
+    ;;
+
+    *)
+	echo "usage: $0 start"
+    ;;
+
+esac
+
+exit 0
+

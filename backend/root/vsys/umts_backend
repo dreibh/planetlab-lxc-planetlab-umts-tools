@@ -1,0 +1,97 @@
+#!/bin/bash
+
+sliver=$1
+
+. /usr/lib/umts_functions
+
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin 
+
+if [[ $sliver == "" ]]; then
+	echo "I need the first argument (the sliver name)";
+	exit 1
+fi
+
+read line
+
+command=`echo ${line%% *}`
+rest=`echo ${line#* }`
+
+case "$command" in
+    start)
+	logger "Starting the umts connection for $sliver"
+	start_umts $sliver;
+	
+	if [[ $? == 0 ]] ; then
+		#echo "OK" 
+		true
+	else
+		echo "Failed"
+	fi
+    ;;
+
+    stop)
+	logger "Stopping umts connection for $sliver"
+	stop_umts $sliver;
+
+	if [[ $? == 0 ]] ; then
+		#echo "OK"
+		true
+	else
+		echo "Failed"
+	fi
+
+    ;;
+
+    add)
+	logger "Request to add a destination for the umts connection";	
+	
+	if ! valid_dotted_quad "$rest"; then
+		echo "Failed"
+	else
+		add_destination "$rest" $sliver;
+		if [[ $? == 0 ]] ; then
+			echo "OK"
+		else
+			echo "Failed"
+		fi
+	fi
+
+	;;	
+
+    del)
+	logger "Request to del a destination for the umts connection";
+    	
+	if ! valid_dotted_quad "$rest"; then
+		echo "Failed"
+	else
+		del_destination "$rest" $sliver;
+		if [[ $? == 0 ]] ; then
+			echo "OK"
+		else
+			echo "Failed"
+		fi
+	fi
+	;;
+ 
+    status)
+	if  status_umts; then
+		echo "Connected"
+	else 
+		echo "Disconnected"
+	fi
+	;;
+
+    *)
+  	echo "Wrong command"
+    ;;
+
+esac
+
+
+#sleep 1
+echo "EOF"
+
+
+exit 0
+

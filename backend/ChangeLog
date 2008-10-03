@@ -1,0 +1,9 @@
+
+
+0.4 - Giovanni Di Stasi <giovanni.distasi@unina.it>
+
+* Destinations added with "umts add ..." affect only the umts sliver
+* Added an iproute2 table (umts_table)
+* Implemented a better umts device discovery mechanism (using udev)
+* Added a check on the ip address provided by the user
+
