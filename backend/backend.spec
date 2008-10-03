@@ -27,11 +27,12 @@ Backend part of a program that allows users of a slice to control a PPP connecti
 rm -rf $RPM_BUILD_ROOT
 
 %install
+pushd backend
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 make clean
 cp -af root/* $RPM_BUILD_ROOT/
-
+popd
 
 %clean
 
@@ -52,7 +53,7 @@ cp -af root/* $RPM_BUILD_ROOT/
 /etc/rc.d/init.d/umts
 
 %defattr(-,root,root)
-%doc AUTHORS TODO
+%doc backend/AUTHORS backend/TODO
 
 %changelog
 * Tue Sep 30 2008 Giovanni Di Stasi <giovanni.distasi@unina.it> -

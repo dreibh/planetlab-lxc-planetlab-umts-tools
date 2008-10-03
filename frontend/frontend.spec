@@ -25,14 +25,16 @@ Frontend part of a program that allows users of a slice to control a PPP connect
 
 %build
 rm -rf $RPM_BUILD_ROOT
+pushd frontend
 make 
+popd 
 
 %install
 rm -rf $RPM_BUILD_ROOT
-
+pushd frontend
 mkdir -p $RPM_BUILD_ROOT/usr/bin/
 install -D -s umts $RPM_BUILD_ROOT/usr/bin/
-
+popd
 
 %clean
 
@@ -43,7 +45,7 @@ install -D -s umts $RPM_BUILD_ROOT/usr/bin/
 %files
 %defattr(-,root,root)
 /usr/bin/umts
-%doc AUTHORS VERSION README.User README.PI
+%doc frontend/AUTHORS frontend/VERSION frontend/README.User frontend/README.PI
 
 %changelog
 * Tue Sep 30 2008 Giovanni Di Stasi <giovanni.distasi@unina.it> -
