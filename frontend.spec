@@ -1,7 +1,7 @@
 %define module_taglevel_varname release
 
 %define name planetlab-umts-tools-frontend
-%define version 0.4
+%define version 0.5
 %define release 1
 
 Summary: UMTS tools for PlanetLab

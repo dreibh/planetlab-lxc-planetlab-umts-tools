@@ -1,6 +1,6 @@
 %define name planetlab-umts-tools-backend
-%define version 0.4
-%define release 2
+%define version 0.5
+%define release 1
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
