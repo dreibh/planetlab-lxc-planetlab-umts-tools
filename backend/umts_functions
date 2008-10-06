@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 PPPD_PIDFILE=/var/run/umts_pppd.pid
 
 PPPD=pppd
@@ -17,7 +16,7 @@ DESTS_FILE="/tmp/umts_dest_file"
 
 FILE_TEMP_NID="/tmp/umts_temp_nid"
 
-FILE_UMTS_INT="/var/run/umts_int"
+FILE_UMTS_INT="/tmp/umts_dev"
 
 
 function set_umts_dev(){
@@ -75,74 +74,41 @@ function init(){
 }
 
 
-
-
 function get_temp_nid(){
 	cat $FILE_TEMP_NID
 }
 
 
-function workaround_on(){
-	local sliver_nid=$1
-	local temp_nid=$2
-
-	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
-	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
-	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
-
-#	iptables -t mangle -D POSTROUTING -j MARK --copy-xid 0x00
-#	iptables -t mangle -I POSTROUTING 1 ! -p icmp -j MARK --copy-xid 0x00 
-
-}
-
-function workaround_off(){
-	local sliver_nid=$1
-	local temp_nid=$2
-
-	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
-	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
-	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
-
-#	iptables -t mangle -I POSTROUTING 1 -j MARK --copy-xid 0x00
-#	iptables -t mangle -D POSTROUTING ! -p icmp -j MARK --copy-xid 0x00 
-}
-
-#called when the connection is up
+#called when the connection is started
 function conn_on(){
 	local sliver=$1
-	local sliver_nid=$2
+	#local sliver_nid=$2
 
-	#add_interface $1
+	#DESTS_FILE contains added destinations
 	rm -f $DESTS_FILE 
-
 	touch $DESTS_FILE > /dev/null 2>&1
 
-	
 	set_temp_nid $sliver_nid
-	local temp_nid=`get_temp_nid`
 
 	set_routes $sliver
-
-
-	workaround_on $sliver_nid $temp_nid
 
 	cat $LOGF | grep "local"
 	return 0
 
 }
 
-#called when the connection is down
+#called when the connection is terminated
 function conn_off(){
 	local sliver=$1
-	local sliver_nid=$2
-
-	temp_nid=`get_temp_nid`
-	workaround_off  $sliver_nid $temp_nid
+	#local sliver_nid=$2
 
 	unset_routes $sliver
 
+	for i in `cat $DESTS_FILE`; do
+		del_destination $i $sliver > /dev/null 2>&1
+	done
+
+	rm $DESTS_FILE >/dev/null 2>&1
 }
 
 function start_umts(){
@@ -242,49 +208,50 @@ function add_interface(){
 
 #remove the ppp interface from the slice - not used at the moment
 function del_interface(){
-    #not working yet because of naddress incompleteness
     local nid=`get_nid $1`
     #$NADDRESS --remove --nid $NID --ip $PPP_INT >>$LOGFILE 2>&1;
 }
 
-#get slice network id needed by naddress
+#get slice network id
 function get_nid(){
-    #NIDFILE="/usr/local/etc/vservers/${1}/context"
-    #cat $NIDFILE
     id -u ${1}
 }
 
-#enable the explicit bind to the ppp interface
 function set_routes(){
 	local sliver=$1
 	local sliver_nid=`get_nid $sliver`
-	PPP_ADDR=`get_ppp_address`
+	local temp_nid=`get_temp_nid`
+	local ppp_addr=`get_ppp_address`
 
-
+	#remarking of packets to trigger rerouting and SNAT
+	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
+	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
+	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+	
+	#enable the explicit bind to the ppp interface
 	ip route flush table umts_table >/dev/null 2>&1 
-
-	# OLD ip rule add from $PPP_ADDR fwmark $sliver_nid table umts_table >/dev/null 2>&1
-	ip rule add from $PPP_ADDR fwmark `get_temp_nid` table umts_table >/dev/null 2>&1
-
+	ip rule add from $ppp_addr fwmark `get_temp_nid` table umts_table >/dev/null 2>&1
 	ip route add default dev $PPP_INT src `get_ppp_address` table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
 }
 
-#disable the explicit bind to the ppp interface
 function unset_routes(){
 	local sliver=$1
 	local sliver_nid=`get_nid $sliver`
+	local temp_nid=`get_temp_nid`
 	local ppp_addr=`get_ppp_address`
 
+	#remarking and SNAT removed 
+	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
+	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
+	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+
+	#disable the explicit bind to the ppp interface
 	ip rule del from $ppp_addr fwmark `get_temp_nid` table umts_table  >/dev/null 2>&1
 	ip route del default dev $PPP_INT  src `get_ppp_address` table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
-
-	for i in `cat $DESTS_FILE`; do
-		del_destination $i $sliver > /dev/null 2>&1
-	done
-
-	rm $DESTS_FILE >/dev/null 2>&1
 
 }
 
@@ -302,7 +269,6 @@ function add_destination(){
 		return 1;
 	fi
 	
-	#old - if ip route add to "$dest" dev $PPP_INT >/dev/null 2>&1  ;  then
 	if ip rule add to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
 		echo "$dest" >> $DESTS_FILE
 		return 0
@@ -337,10 +303,9 @@ function get_ppp_address(){
 
 function set_temp_nid(){
 	local sliver_nid=$1
-	temp_nid=$((0x20000+$sliver_nid))
-	#k=0
+	local temp_nid=$((0x20000+$sliver_nid))
 
-	#FIXME
+	#k=0
 	#temp_nid=$sliver_nid
 	
 	#while grep :$temp_nid: /etc/passwd; do

@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-backend
 %define version 0.5
-%define release 1
+%define release 2
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
@@ -33,7 +33,7 @@ pushd backend
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 make clean
-cp -af root/* $RPM_BUILD_ROOT/
+make install prefix=$RPM_BUILD_ROOT
 popd
 
 %clean

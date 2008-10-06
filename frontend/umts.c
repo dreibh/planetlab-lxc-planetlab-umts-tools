@@ -76,7 +76,7 @@ int main(int argc, char **argv, char **envp){
 
 	if (flock(lock_fd, LOCK_EX |  LOCK_NB)){
 		if (errno == EWOULDBLOCK){
-			printf("An operation is already being performed");
+			printf("An operation is already being performed.\n");
 			close(lock_fd);
 			exit(1);
 		} else if (errno == EBADF){
