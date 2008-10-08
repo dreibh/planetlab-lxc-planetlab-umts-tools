@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-frontend
 %define version 0.5
-%define release 2
+%define release 3
 
 Summary: UMTS tools for PlanetLab
 Name: %{name}

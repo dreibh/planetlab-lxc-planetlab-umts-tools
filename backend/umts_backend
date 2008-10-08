@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Vsys backend of the planetlab-umts-tools
+# Vsys backend
 
 
 sliver=$1
@@ -25,10 +25,7 @@ case "$command" in
 	logger "Starting the umts connection for $sliver"
 	start_umts $sliver;
 	
-	if [[ $? == 0 ]] ; then
-		#echo "OK" 
-		true
-	else
+	if [[ $? != 0 ]] ; then
 		echo "Failed"
 	fi
     ;;
@@ -37,17 +34,14 @@ case "$command" in
 	logger "Stopping umts connection for $sliver"
 	stop_umts $sliver;
 
-	if [[ $? == 0 ]] ; then
-		#echo "OK"
-		true
-	else
+	if [[ $? != 0 ]] ; then
 		echo "Failed"
 	fi
 
     ;;
 
     add)
-	logger "Request to add a destination for the umts connection";	
+	logger "Request to add a destination by $sliver for the umts connection";	
 	
 	if ! valid_dotted_quad "$rest"; then
 		echo "Failed"
@@ -63,7 +57,7 @@ case "$command" in
 	;;	
 
     del)
-	logger "Request to del a destination for the umts connection";
+	logger "Request to del a destination by $sliver for the umts connection";
     	
 	if ! valid_dotted_quad "$rest"; then
 		echo "Failed"

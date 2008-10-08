@@ -52,13 +52,13 @@ The answer is either Connected or Disconnected.
 To add a destination (packets directed towards this destination will go out 
 of the node through the ppp interface):
 
-  umts add network_address/netmask
+  umts add ip_destination
 
 The answer is OK if everything went well.
 
 To del a destination previously added:
 
-  umts del network_address/netmask
+  umts del ip_destination
 
 The answer is OK if everything went well.
 

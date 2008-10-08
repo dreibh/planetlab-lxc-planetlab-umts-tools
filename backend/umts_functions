@@ -1,46 +1,35 @@
 #!/bin/bash
 
-PPPD_PIDFILE=/var/run/umts_pppd.pid
-
-PPPD=pppd
 
 STROK="remote IP address"
-
-PPP_INT=ppp0
-
 GCOM=""
-
 LOGF="/tmp/umtslogs"
-
+PPPD_PIDFILE="/var/run/umts_pppd.pid"
 DESTS_FILE="/tmp/umts_dest_file"
-
 FILE_TEMP_NID="/tmp/umts_temp_nid"
-
 FILE_UMTS_INT="/tmp/umts_dev"
+PPP_INT=ppp0
+PPPD=pppd
 
 
 function set_umts_dev(){
-	echo $1 > $FILE_UMTS_INT
+	local umts_dev=$1
+	echo $umts_dev > $FILE_UMTS_INT
 }
 
 function get_umts_dev(){
-	cat $FILE_UMTS_INT
+	if [ -e $FILE_UMTS_INT ]; then
+		cat $FILE_UMTS_INT
+	fi
+}
+
+function unset_umts_dev(){
+	rm -f $FILE_UMTS_INT
 }
 
 
-function start_gcom(){
-    if ! $GCOM -d `get_umts_dev`; then
-	return 1;
-    fi
-
-    return 0
-}
-
-function init(){
+function init_umts(){
 	local found=1
-
-	modprobe nozomi
-	modprobe serial_cs
 
 	if [ -f /usr/bin/gcom ]; then 
 		GCOM=/usr/bin/gcom
@@ -51,21 +40,25 @@ function init(){
     		return 1;
     	fi
 
+	unset_umts_dev
+
 	for i in /dev/umts_modem /dev/umts_modem1; do	
 		echo "Testing if the umts interface is present on the device $i..."
-		if $GCOM -d $i; then
-			found=0
-			set_umts_dev $i 
-			break
+		if [ -e $i ]; then
+			if $GCOM -d $i; then
+				found=0
+				set_umts_dev $i 
+				break
+			fi
 		fi	
 	done 
 	
 	if ! [  $found == 0 ]; then
-		echo "I couldn't find the umts device; make a symlink from it to /dev/umts_modem"
+		echo "I couldn't find the umts device. Make a symlink from it to /dev/umts_modem."
 		return 1
 	fi
 
-	if ! grep umts_table /etc/iproute2/rt_tables > /dev/null 2>&1; then
+	if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
 		echo "20 umts_table" >> /etc/iproute2/rt_tables
 	fi
 
@@ -82,11 +75,10 @@ function get_temp_nid(){
 #called when the connection is started
 function conn_on(){
 	local sliver=$1
-	#local sliver_nid=$2
 
 	#DESTS_FILE contains added destinations
 	rm -f $DESTS_FILE 
-	touch $DESTS_FILE > /dev/null 2>&1
+	touch $DESTS_FILE
 
 	set_temp_nid $sliver_nid
 
@@ -100,7 +92,6 @@ function conn_on(){
 #called when the connection is terminated
 function conn_off(){
 	local sliver=$1
-	#local sliver_nid=$2
 
 	unset_routes $sliver
 
@@ -121,8 +112,14 @@ function start_umts(){
 	 return 0; 
     fi
 
-    if ! [ -c `get_umts_dev` ]; then
-	echo "Umts interface not present"
+    if [[ `get_umts_dev` == "" ]]; then 
+	if [[ init_umts != 0 ]]; then
+		return 1
+	fi
+    fi
+
+    if ! [ -e `get_umts_dev` ];  then
+	echo "Umts interface is not present"
 	return 1
     fi
 
@@ -140,10 +137,8 @@ function start_umts(){
 
     echo $! > $PPPD_PIDFILE
 
-    	
     sleep 5s;  #waiting for the interface to establish the link
     if grep "$STROK" $LOGF >/dev/null 2>&1; then
-	
 	conn_on $sliver $sliver_nid
     else
 	#second try
@@ -162,6 +157,7 @@ function start_umts(){
 
 function stop_umts(){
     local sliver=$1
+    local sliver_nid=`get_nid $sliver`
 
     if ! [ -e $PPPD_PIDFILE ]; then 
 	echo "Disconnected"
@@ -171,10 +167,9 @@ function stop_umts(){
     PID=`cat $PPPD_PIDFILE`;
 
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then 	
-	#del_interface $1;
-	conn_off $sliver `get_nid $sliver`
+	conn_off $sliver $sliver_nid
 	kill $PID;
-	sleep 5;
+	sleep 4;
     fi
 
     if status_umts; then
@@ -223,16 +218,16 @@ function set_routes(){
 	local temp_nid=`get_temp_nid`
 	local ppp_addr=`get_ppp_address`
 
-	#remarking of packets to trigger rerouting and SNAT
+	#remarking of packets, to trigger rerouting, and SNAT
 	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
 	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
 	
 	#enable the explicit bind to the ppp interface
 	ip route flush table umts_table >/dev/null 2>&1 
-	ip rule add from $ppp_addr fwmark `get_temp_nid` table umts_table >/dev/null 2>&1
-	ip route add default dev $PPP_INT src `get_ppp_address` table umts_table >/dev/null 2>&1
+	ip rule add from $ppp_addr fwmark $temp_nid table umts_table >/dev/null 2>&1
+	ip route add default dev $PPP_INT src $ppp_addr table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
 }
 
@@ -245,12 +240,12 @@ function unset_routes(){
 	#remarking and SNAT removed 
 	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
 	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source `get_ppp_address`
+	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
 
 	#disable the explicit bind to the ppp interface
-	ip rule del from $ppp_addr fwmark `get_temp_nid` table umts_table  >/dev/null 2>&1
-	ip route del default dev $PPP_INT  src `get_ppp_address` table umts_table >/dev/null 2>&1
+	ip rule del from $ppp_addr fwmark $temp_nid table umts_table  >/dev/null 2>&1
+	ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
 
 }
@@ -258,9 +253,7 @@ function unset_routes(){
 function add_destination(){
 	local dest="$1"
 	local sliver=$2
-	
 	local sliver_nid=`get_nid $sliver`
-
 	local temp_nid=`get_temp_nid`
 
 	if [[ ! $dest ]]; then return 1; fi
@@ -281,13 +274,10 @@ function add_destination(){
 function del_destination(){
 	local dest="$1"
 	local sliver=$2
-
 	local sliver_nid=`get_nid $sliver`
-
 	local temp_nid=`get_temp_nid`
 
 	if [[ ! $dest ]]; then return 1; fi
-	#old - if ip route del to "$dest" dev $PPP_INT >/dev/null 2>&1; then
 	if ip rule del to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
 		return 0;
 	else 
@@ -305,9 +295,7 @@ function set_temp_nid(){
 	local sliver_nid=$1
 	local temp_nid=$((0x20000+$sliver_nid))
 
-	#k=0
-	#temp_nid=$sliver_nid
-	
+	#k=0	
 	#while grep :$temp_nid: /etc/passwd; do
 	#	temp_nid=$((temp_nid+1))
 	#	k=$((k+1))
@@ -317,13 +305,12 @@ function set_temp_nid(){
 	#		exit 1
 	#	fi
 	#done
-
 	echo $temp_nid > $FILE_TEMP_NID
 
 
 }
 
-
+# checks ip addresses  
 function valid_dotted_quad(){
     oldIFS=$IFS
     IFS=.

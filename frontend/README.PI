@@ -23,7 +23,7 @@ add_to_nodegroup.py) that can be used to do this operation automatically.
 ========================================================================
 SUPPORTED CARDS
 
-At present the Globetrotter 3G/HSDPA and MERLIN U530 UMTS PCMCIA are
-supported.  Every other card supported by the nozomi driver, or by the
-serial_cs drivers, should work as well.
+At present the Globetrotter 3G/HSDPA and the Huawei e620 are
+supported. Any other card supported by the nozomi driver should work as 
+well.
 

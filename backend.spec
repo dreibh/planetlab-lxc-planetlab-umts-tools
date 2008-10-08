@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-backend
 %define version 0.5
-%define release 2
+%define release 3
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
@@ -41,9 +41,11 @@ popd
 
 %post 
 /sbin/udevadm control reload_rules
+/sbin/udevtrigger
+/bin/sleep 2
 /sbin/chkconfig umts on
-/etc/rc.d/init.d/umts start
 /sbin/service vsys restart
+/etc/rc.d/init.d/umts start
 
 %preun
 /sbin/chkconfig umts off
