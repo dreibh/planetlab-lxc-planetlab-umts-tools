@@ -113,7 +113,7 @@ function start_umts(){
     fi
 
     if [[ `get_umts_dev` == "" ]]; then 
-	if [[ init_umts != 0 ]]; then
+	if [[ init_umts != 0 ]]; then	
 		return 1
 	fi
     fi
@@ -142,7 +142,7 @@ function start_umts(){
 	conn_on $sliver $sliver_nid
     else
 	#second try
-	sleep 4s;
+	sleep 5s;
 	if grep "$STROK" $LOGF >/dev/null 2>&1; then
 	    conn_on $sliver $sliver_nid
 	else
@@ -169,7 +169,7 @@ function stop_umts(){
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then 	
 	conn_off $sliver $sliver_nid
 	kill $PID;
-	sleep 4;
+	sleep 2s;
     fi
 
     if status_umts; then
@@ -223,6 +223,9 @@ function set_routes(){
 	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
 	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+
+	#forbids other slices to use the UMTS interface
+	iptables -t nat -I POSTROUTING 1 -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
 	
 	#enable the explicit bind to the ppp interface
 	ip route flush table umts_table >/dev/null 2>&1 
@@ -242,6 +245,8 @@ function unset_routes(){
 	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
 	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
+
+	iptables -t nat -D POSTROUTING -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
 
 	#disable the explicit bind to the ppp interface
 	ip rule del from $ppp_addr fwmark $temp_nid table umts_table  >/dev/null 2>&1
