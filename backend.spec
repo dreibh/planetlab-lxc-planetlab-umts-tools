@@ -1,8 +1,8 @@
 %define module_taglevel_varname release
 
 %define name planetlab-umts-tools-backend
-%define version 0.5
-%define release 4
+%define version 0.6
+%define release 1
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}

@@ -27,6 +27,8 @@
 
 #include "umts.h"
 
+// vsys frontend
+
 //#define DEBUG
 
 int vfd0, vfd1;

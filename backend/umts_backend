@@ -72,8 +72,10 @@ case "$command" in
 	;;
  
     status)
-	if  status_umts; then
-		echo "Connected"
+	if  status_umts $sliver; then
+		if check_who_locked $sliver; then
+			echo "Connected"
+		fi
 	else 
 		echo "Disconnected"
 	fi

@@ -8,8 +8,10 @@ PPPD_PIDFILE="/var/run/umts_pppd.pid"
 DESTS_FILE="/tmp/umts_dest_file"
 FILE_TEMP_NID="/tmp/umts_temp_nid"
 FILE_UMTS_INT="/tmp/umts_dev"
-PPP_INT=ppp0
-PPPD=pppd
+LOCK_DIR="/var/run/umts_lock"
+FILE_LOCK_SLIVER="/var/run/umts_locking_sliver"
+PPP_INT="ppp0"
+PPPD="pppd"
 
 
 function set_umts_dev(){
@@ -41,6 +43,10 @@ function init_umts(){
     	fi
 
 	unset_umts_dev
+	
+	if [ -e $LOCK_DIR ]; then
+		rmdir $LOCK_DIR
+	fi
 
 	for i in /dev/umts_modem /dev/umts_modem1; do	
 		echo "Testing if the umts interface is present on the device $i..."
@@ -78,7 +84,6 @@ function conn_on(){
 
 	#DESTS_FILE contains added destinations
 	rm -f $DESTS_FILE 
-	touch $DESTS_FILE
 
 	set_temp_nid $sliver_nid
 
@@ -92,8 +97,9 @@ function conn_on(){
 #called when the connection is terminated
 function conn_off(){
 	local sliver=$1
+	local ppp_addr=$2
 
-	unset_routes $sliver
+	unset_routes $sliver $ppp_addr
 
 	for i in `cat $DESTS_FILE`; do
 		del_destination $i $sliver > /dev/null 2>&1
@@ -105,8 +111,11 @@ function conn_off(){
 function start_umts(){
     local sliver=$1
     local sliver_nid=`get_nid $sliver`
-   
-    
+
+    if ! lock $sliver; then
+	return 1
+    fi	
+
     if status_umts; then
 	 echo "Already connected"
 	 return 0; 
@@ -158,44 +167,54 @@ function start_umts(){
 function stop_umts(){
     local sliver=$1
     local sliver_nid=`get_nid $sliver`
+    local ppp_addr
 
     if ! [ -e $PPPD_PIDFILE ]; then 
 	echo "Disconnected"
 	return 0;
     fi
 
+    ppp_addr=`get_ppp_address`
+
+    if ! check_who_locked $sliver; then
+	return 1
+    fi
+
     PID=`cat $PPPD_PIDFILE`;
 
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then 	
-	conn_off $sliver $sliver_nid
-	kill $PID;
+	kill $PID;	touch $DESTS_FILE
+
 	sleep 2s;
     fi
 
     if status_umts; then
 	return 1;
     else
+	conn_off $sliver $ppp_addr
 	cat $LOGF | grep "time"
 	rm $PPPD_PIDFILE
+	unlock $sliver;
 	return 0
     fi
 }
 
 
 function status_umts(){
-
+    local sliver=$1
+	
     if ! [ -e $PPPD_PIDFILE ]; then return 1; fi
 
     PID=`cat $PPPD_PIDFILE`
 
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then
-	return 0;
+        return 0;
     else 
 	return 1;
     fi
 }
 
-#add the ppp interface from the slice - not used at the moment
+#add the ppp interface to the slice - not used at the moment
 function add_interface(){
     local nid=`get_nid $1`
     $NADDRESS --add --nid $nid --ip $PPP_INT >>$LOGFILE 2>&1;
@@ -222,12 +241,14 @@ function set_routes(){
 	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
 	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
 	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
+	
+	#restores the original mark
 	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
 
 	#forbids other slices to use the UMTS interface
-	iptables -t nat -I POSTROUTING 1 -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
+	iptables -t mangle -I POSTROUTING 2 -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
 	
-	#enable the explicit bind to the ppp interface
+	#enables the explicit bind to the ppp interface
 	ip route flush table umts_table >/dev/null 2>&1 
 	ip rule add from $ppp_addr fwmark $temp_nid table umts_table >/dev/null 2>&1
 	ip route add default dev $PPP_INT src $ppp_addr table umts_table >/dev/null 2>&1
@@ -236,9 +257,10 @@ function set_routes(){
 
 function unset_routes(){
 	local sliver=$1
+	local ppp_addr=$2
 	local sliver_nid=`get_nid $sliver`
 	local temp_nid=`get_temp_nid`
-	local ppp_addr=`get_ppp_address`
+	
 
 	#remarking and SNAT removed 
 	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
@@ -246,11 +268,11 @@ function unset_routes(){
 	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
 
-	iptables -t nat -D POSTROUTING -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
+	iptables -t mangle -D POSTROUTING -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
 
 	#disable the explicit bind to the ppp interface
 	ip rule del from $ppp_addr fwmark $temp_nid table umts_table  >/dev/null 2>&1
-	ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
+	#ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
 
 }
@@ -266,7 +288,11 @@ function add_destination(){
 	if ! status_umts; then
 		return 1;
 	fi
-	
+
+	if ! check_who_locked $sliver; then
+		return 1;
+	fi
+
 	if ip rule add to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
 		echo "$dest" >> $DESTS_FILE
 		return 0
@@ -283,6 +309,11 @@ function del_destination(){
 	local temp_nid=`get_temp_nid`
 
 	if [[ ! $dest ]]; then return 1; fi
+
+	if ! check_who_locked $sliver; then
+		return 1;
+	fi
+
 	if ip rule del to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
 		return 0;
 	else 
@@ -314,6 +345,67 @@ function set_temp_nid(){
 
 
 }
+
+function check_who_locked(){
+	local sliver=$1
+	local sliver_nid=`get_nid $sliver`
+	local ret=0
+
+	if [ -e $LOCK_DIR ]; then
+ 		if [[ `cat $FILE_LOCK_SLIVER` != $sliver_nid ]]; then
+			echo "Interface in use by another slice.";
+			ret=1
+		fi
+	else
+		ret=1
+	fi
+
+	return $ret
+
+}
+
+function lock(){
+	local sliver=$1
+	local sliver_nid=`get_nid $sliver`
+	local ret=0
+
+	if [ -e $LOCK_DIR ]; then
+ 		if ! check_who_locked $sliver; then
+			ret=1
+		fi
+	else 
+		if mkdir $LOCK_DIR >/dev/null 2>&1; then
+			echo "$sliver_nid" > $FILE_LOCK_SLIVER
+		else
+			ret=1
+		fi
+	fi
+
+	return $ret
+}
+
+function unlock(){
+	local sliver=$1
+	local sliver_nid=`get_nid $sliver`
+	local ret=0
+
+	if ! [ -e $LOCK_DIR ]; then
+		ret=1
+	else 
+		if ! check_who_locked $sliver; then
+			ret=1
+		else
+			if ! rmdir $LOCK_DIR; then
+				ret=1
+			fi
+		fi	
+	fi
+
+	return $ret
+}
+
+
+
 
 # checks ip addresses  
 function valid_dotted_quad(){
