@@ -9,8 +9,8 @@ PPPD_PIDFILE="/var/run/umts_pppd.pid"
 DESTS_FILE="/tmp/umts_dest_file"
 FILE_TEMP_NID="/tmp/umts_temp_nid"
 FILE_UMTS_INT="/tmp/umts_dev"
-LOCK_DIR="/var/run/umts_lock"
-FILE_LOCK_SLIVER="/var/run/umts_locking_sliver"
+LOCK_DIR="/tmp/umts_lock_d"
+FILE_LOCK_SLIVER="/tmp/umts_locking_sliver"
 PPP_INT="ppp0"
 PPPD="pppd"
 CHAT_SCRIPTS="/etc/chatscripts"
@@ -120,10 +120,6 @@ function start_umts(){
         	'AT+CGDCONT=1,\"IP\",\"$APN\"' OK \
 		ATD$NUM   CONNECT ''" > $LOGF &
 
-
-    #exec /usr/sbin/pppd nodetach `get_umts_dev` 460800 \
-    #    	0.0.0.0:0.0.0.0 \
-    #    	connect "/usr/sbin/chat -f ${CHAT_SCRIPTS}/vodaphone-it" > $LOGF &
 
     echo $! > $PPPD_PIDFILE
 

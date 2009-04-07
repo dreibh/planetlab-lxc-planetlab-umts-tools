@@ -50,11 +50,11 @@ sleep 1
 #/sbin/chkconfig umts off
 
 %files
-/vsys/umts_backend
+/vsys/umtsd
 /usr/lib/umts_functions
 /etc/udev/rules.d/96-umts-tools.rules
 #/etc/rc.d/init.d/umts
-#/etc/chatscripts/vodaphone-it
+
 
 %defattr(-,root,root)
 %doc AUTHORS TODO

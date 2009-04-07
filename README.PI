@@ -10,7 +10,7 @@ way the  host environment  of the  node will get  the tools  needed to
 manage the  3G umts/hsdpa  interface. Then, you  have to add  the vsys
 attribute to the slivers you want to grant the access to the umts/hsdpa
 interface.  The value  of this  attribute ("vsys")  has to  be  set to
-"umts_backend"
+"umtsd"
 
 Please read README.user for further explanations on how the 3G
 umts/hsdpa interface is supported.

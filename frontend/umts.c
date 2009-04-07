@@ -45,8 +45,8 @@ char * lock_file="/var/run/umts_lock";
 
 int ret;
 
-char * vsys_in="/vsys/umts_backend.in";
-char * vsys_out="/vsys/umts_backend.out";
+char * vsys_in="/vsys/umtsd.in";
+char * vsys_out="/vsys/umtsd.out";
 
 fd_set set;
 char lineread[BUFSIZE];
