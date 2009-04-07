@@ -114,13 +114,6 @@ to communicate with the service. By developing custom back-end
 (i.e. programs located and running in the slice context) the developer
 provides normal users a set of hooks to execute privileged operations.
 
-We developed a pair of C programs acting as a vsys front-end (“umts”)
-and back-end (“umts_backend”). These two programs communicate by means
-of the pipes created by vsys. “umts” runs in the guest environment and
-writes in one of these two pipes; “umts_backend”, in its turn, reads
-the “umts” command and performs the requested operation, by executing
-a bash script (“umts.sh”).
-
 
 ========================================================================
 AUTHORS:
