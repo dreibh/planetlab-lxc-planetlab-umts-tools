@@ -2,7 +2,8 @@
 
 
 STROK="remote IP address"
-GCOM=""
+GCOMP="comgt"
+GCOM="/usr/bin/"${GCOMP}
 LOGF="/tmp/umtslogs"
 PPPD_PIDFILE="/var/run/umts_pppd.pid"
 DESTS_FILE="/tmp/umts_dest_file"
@@ -12,61 +13,25 @@ LOCK_DIR="/var/run/umts_lock"
 FILE_LOCK_SLIVER="/var/run/umts_locking_sliver"
 PPP_INT="ppp0"
 PPPD="pppd"
+CHAT_SCRIPTS="/etc/chatscripts"
+UMTS_CONF="/etc/umts.conf"
 
 
-function set_umts_dev(){
-	local umts_dev=$1
-	echo $umts_dev > $FILE_UMTS_INT
-}
 
 function get_umts_dev(){
-	if [ -e $FILE_UMTS_INT ]; then
-		cat $FILE_UMTS_INT
-	fi
+	echo "/dev/umts_modem"
 }
-
-function unset_umts_dev(){
-	rm -f $FILE_UMTS_INT
-}
-
 
 function init_umts(){
-	local found=1
-
-	if [ -f /usr/bin/gcom ]; then 
-		GCOM=/usr/bin/gcom
-    	elif [ -f /usr/bin/comgt ]; then
-		GCOM=/usr/bin/comgt
-    	else
-		echo "I couldn't find gcom"
-    		return 1;
-    	fi
-
-	unset_umts_dev
+	#local found=1
 	
 	if [ -e $LOCK_DIR ]; then
 		rmdir $LOCK_DIR
 	fi
 
-	for i in /dev/umts_modem /dev/umts_modem1; do	
-		echo "Testing if the umts interface is present on the device $i..."
-		if [ -e $i ]; then
-			if $GCOM -d $i; then
-				found=0
-				set_umts_dev $i 
-				break
-			fi
-		fi	
-	done 
-	
-	if ! [  $found == 0 ]; then
-		echo "I couldn't find the umts device. Make a symlink from it to /dev/umts_modem."
-		return 1
-	fi
-
-	if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
-		echo "20 umts_table" >> /etc/iproute2/rt_tables
-	fi
+	#if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
+	#	echo "20 umts_table" >> /etc/iproute2/rt_tables
+	#fi
 
 	return 0
 
@@ -86,7 +51,6 @@ function conn_on(){
 	rm -f $DESTS_FILE 
 
 	set_temp_nid $sliver_nid
-
 	set_routes $sliver
 
 	cat $LOGF | grep "local"
@@ -112,6 +76,10 @@ function start_umts(){
     local sliver=$1
     local sliver_nid=`get_nid $sliver`
 
+    if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
+	echo "20 umts_table" >> /etc/iproute2/rt_tables
+    fi
+
     if ! lock $sliver; then
 	return 1
     fi	
@@ -120,19 +88,26 @@ function start_umts(){
 	 echo "Already connected"
 	 return 0; 
     fi
-
-    if [[ `get_umts_dev` == "" ]]; then 
-	if [[ init_umts != 0 ]]; then	
-		return 1
-	fi
-    fi
-
-    if ! [ -e `get_umts_dev` ];  then
-	echo "Umts interface is not present"
+    
+    echo "Starting GCOM..."
+    if ! $GCOM -d `get_umts_dev`; then
+	unlock $sliver
 	return 1
     fi
 
     rm -f $LOGF
+
+    if [ -e $UMTS_CONF ]; then
+    	. $UMTS_CONF
+    fi
+ 
+    if ! [[ $APN ]]; then
+	APN="web.omnitel.it"
+    fi
+    if ! [[ $NUM ]]; then
+        NUM="*99***1#"
+    fi
+    
 
     exec /usr/sbin/pppd nodetach `get_umts_dev` 460800 \
         	0.0.0.0:0.0.0.0 \
@@ -142,7 +117,13 @@ function start_umts(){
         	ABORT           '\nNO ANSWER\r'                \
         	ABORT           '\nRINGING\r\n\r\nRINGING\r'   \
         	''              ATZ     OK 'ATQ0 V1 E1 S0=0 &C1 &D2 +FCLASS=0' OK  \
-        	ATD*99***1#    CONNECT ''" > $LOGF &
+        	'AT+CGDCONT=1,\"IP\",\"$APN\"' OK \
+		ATD$NUM   CONNECT ''" > $LOGF &
+
+
+    #exec /usr/sbin/pppd nodetach `get_umts_dev` 460800 \
+    #    	0.0.0.0:0.0.0.0 \
+    #    	connect "/usr/sbin/chat -f ${CHAT_SCRIPTS}/vodaphone-it" > $LOGF &
 
     echo $! > $PPPD_PIDFILE
 
@@ -160,8 +141,6 @@ function start_umts(){
 	fi
     fi
 }
-
-
 
 
 function stop_umts(){
@@ -204,7 +183,6 @@ function status_umts(){
     local sliver=$1
 	
     if ! [ -e $PPPD_PIDFILE ]; then return 1; fi
-
     PID=`cat $PPPD_PIDFILE`
 
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then
@@ -237,18 +215,27 @@ function set_routes(){
 	local temp_nid=`get_temp_nid`
 	local ppp_addr=`get_ppp_address`
 
-	#remarking of packets, to trigger rerouting, and SNAT
+	#Asks VNET+ to tag all the packets with the respective sliver id
 	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
+
+	#Changes the netfilter mark of packets to trigger rerouting. 
+	#We need to change the mark because the kernel triggers the rerouting process only
+	#if it sees that the netfilter mark has been altered in the mangle iptables chain
 	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
+
+	#Adds an SNAT rule to set the source IP address of packets that are about to go out through the UMTS
+	#interface. The kernel sets the source address of packets when the first routing process happens
+	#so, without this rule, packets would have the source ip address set on the first routing process of the ethernet interface
 	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
 	
-	#restores the original mark
+	#Restores the original netfilter mark for planetflow
 	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
 
-	#forbids other slices to use the UMTS interface
+	#Forbids other slices to use the UMTS interface
 	iptables -t mangle -I POSTROUTING 2 -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
 	
-	#enables the explicit bind to the ppp interface
+	#Enables the explicit bind to the UMTS interface. Applications launched by the user in the slice that is using the UMTS and that
+	#bind to the UMTS interface will have packets going out through the UMTS interface 
 	ip route flush table umts_table >/dev/null 2>&1 
 	ip rule add from $ppp_addr fwmark $temp_nid table umts_table >/dev/null 2>&1
 	ip route add default dev $PPP_INT src $ppp_addr table umts_table >/dev/null 2>&1
@@ -262,7 +249,7 @@ function unset_routes(){
 	local temp_nid=`get_temp_nid`
 	
 
-	#remarking and SNAT removed 
+	#removing the rules for changing the mark and the rules for SNAT 
 	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
 	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
 	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
@@ -272,7 +259,7 @@ function unset_routes(){
 
 	#disable the explicit bind to the ppp interface
 	ip rule del from $ppp_addr fwmark $temp_nid table umts_table  >/dev/null 2>&1
-	#ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
+	ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
 	ip route flush cache  >/dev/null 2>&1
 
 }
@@ -330,21 +317,9 @@ function get_ppp_address(){
 function set_temp_nid(){
 	local sliver_nid=$1
 	local temp_nid=$((0x20000+$sliver_nid))
-
-	#k=0	
-	#while grep :$temp_nid: /etc/passwd; do
-	#	temp_nid=$((temp_nid+1))
-	#	k=$((k+1))
-	#	if [[ $k == 1000 ]]; then
-	#		logger "Fatal error: I couldn't find a temp_nid"
-	#		stop_umts
-	#		exit 1
-	#	fi
-	#done
 	echo $temp_nid > $FILE_TEMP_NID
-
-
 }
+
 
 function check_who_locked(){
 	local sliver=$1
@@ -362,6 +337,26 @@ function check_who_locked(){
 
 	return $ret
 
+}
+
+function kill_gcom(){
+	
+	killall $GCOMP
+	sleep 3
+	if ! ps -C $GCOMP >/dev/null 2>&1; then
+		echo "$GCOMP terminated."	
+	else 
+		echo "$GCOMP still alive. Try kill -9"
+		sleep 2
+
+		killall -9 $GCOMP
+	
+		if ! ps -C $GCOMP >/dev/null 2>&1; then
+			echo "$GCOMP terminated."
+		else		
+			echo "Couldn't stop $GCOMP. Please contact administrators for assistance."	
+		fi
+	fi
 }
 
 function lock(){

@@ -1,0 +1,2 @@
+KERNEL=="noz0", NAME="umts_modem"
+KERNEL=="ttyUSB*", ATTR{dev}=="188:0", ATTRS{idProduct}=="1001", ATTRS{idVendor}=="12d1", NAME="umts_modem"

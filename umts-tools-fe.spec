@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-frontend
 %define version 0.6
-%define release 1
+%define release 3
 
 Summary: UMTS tools for PlanetLab
 Name: %{name}
@@ -45,7 +45,7 @@ popd
 %files
 %defattr(-,root,root)
 /usr/bin/umts
-%doc frontend/AUTHORS frontend/VERSION frontend/README.User frontend/README.PI
+%doc AUTHORS VERSION README.User README.PI
 
 %changelog
 * Tue Sep 30 2008 Giovanni Di Stasi <giovanni.distasi@unina.it> -

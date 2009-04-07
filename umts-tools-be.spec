@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-backend
 %define version 0.6
-%define release 1
+%define release 3
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
@@ -29,35 +29,35 @@ Backend part of a program that allows users of a slice to control a PPP connecti
 rm -rf $RPM_BUILD_ROOT
 
 %install
-pushd backend
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 make clean
 make install prefix=$RPM_BUILD_ROOT
-popd
 
 %clean
 
 
 %post 
 /sbin/udevadm control reload_rules
+sleep 1
 /sbin/udevtrigger
-/bin/sleep 2
-/sbin/chkconfig umts on
+#/bin/sleep 2
+#/sbin/chkconfig umts on
 /sbin/service vsys restart
-/etc/rc.d/init.d/umts start
+#/etc/rc.d/init.d/umts start
 
 %preun
-/sbin/chkconfig umts off
+#/sbin/chkconfig umts off
 
 %files
 /vsys/umts_backend
 /usr/lib/umts_functions
 /etc/udev/rules.d/96-umts-tools.rules
-/etc/rc.d/init.d/umts
+#/etc/rc.d/init.d/umts
+#/etc/chatscripts/vodaphone-it
 
 %defattr(-,root,root)
-%doc backend/AUTHORS backend/TODO
+%doc AUTHORS TODO
 
 %changelog
 * Tue Sep 30 2008 Giovanni Di Stasi <giovanni.distasi@unina.it> -
