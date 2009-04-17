@@ -25,8 +25,6 @@
 #include <errno.h>
 
 
-#include "umts.h"
-
 // vsys frontend
 
 //#define DEBUG

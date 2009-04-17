@@ -1,10 +1,12 @@
 0.6 - Giovanni Di Stasi <giovanni.distasi@unina.it>
-* More than a sliver allowed to use the UMTS interface (one at a time)
+
+* More than a sliver allowed to use the umts interface (one at a time)
+* Removed init.umts at startup - gcom is called when "umts start" is issued
 
 0.4 - Giovanni Di Stasi <giovanni.distasi@unina.it>
 
 * Destinations added with "umts add ..." affect only the umts sliver
 * Added an iproute2 table (umts_table)
 * Implemented a better umts device discovery mechanism (using udev)
-* Added a check on the ip address provided by the user
+* Added a security check on the ip addresses provided by the user
 

@@ -21,15 +21,6 @@ command=`echo ${line%% *}`
 rest=`echo ${line#* }`
 
 case "$command" in
-    #init)
-	#logger "Initialitation of the UMTS inteface requested by $sliver"
-	#init_umts $sliver;
-	#
-	#if [[ $? != 0 ]] ; then
-	#	echo "Failed"
-	#fi
-    #;;
-
     start)
 	logger "Starting the umts connection for $sliver"
 	start_umts $sliver;
@@ -97,7 +88,7 @@ case "$command" in
 esac
 
 
-#sleep 1
+sleep 1
 echo "EOF"
 
 

@@ -1,2 +1,4 @@
-0.6
-* Support more providers
+0.7
+* Do not call conn_off when umts start fails
+* Better error handling
+

@@ -1,6 +1,6 @@
 all: umts
 
-umts: umts.c umts.h
+umts: umts.c
 	gcc -g umts.c -o umts
 
 clean:
