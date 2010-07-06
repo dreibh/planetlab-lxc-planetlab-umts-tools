@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-backend
 %define version 0.6
-%define release 4
+%define release 5
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
@@ -60,5 +60,8 @@ sleep 1
 %doc AUTHORS TODO
 
 %changelog
+* Tue Jul 06 2010 Baris Metin <Talip-Baris.Metin@sophia.inria.fr> - planetlab-umts-tools-0.6-5
+- cosmetic changes from Giovanni.
+
 * Tue Sep 30 2008 Giovanni Di Stasi <giovanni.distasi@unina.it> -
 - initial revision
