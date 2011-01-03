@@ -37,6 +37,7 @@ install -D -s umts $RPM_BUILD_ROOT/usr/bin/
 popd
 
 %clean
+rm -rf $RPM_BUILD_ROOT
 
 %post
 

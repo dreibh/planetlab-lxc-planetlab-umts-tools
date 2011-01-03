@@ -35,7 +35,7 @@ make clean
 make install prefix=$RPM_BUILD_ROOT
 
 %clean
-
+rm -rf $RPM_BUILD_ROOT
 
 %post 
 /sbin/udevadm control reload_rules
