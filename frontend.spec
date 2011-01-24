@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-frontend
 %define version 0.6
-%define release 5
+%define release 6
 
 Summary: UMTS tools for PlanetLab
 Name: %{name}
@@ -49,6 +49,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc AUTHORS VERSION README.User README.PI
 
 %changelog
+* Mon Jan 24 2011 Thierry Parmentelat <thierry.parmentelat@sophia.inria.fr> - planetlab-umts-tools-0.6-6
+- no semantic change - just fixed specfile for git URL
+
 * Tue Jul 06 2010 Baris Metin <Talip-Baris.Metin@sophia.inria.fr> - planetlab-umts-tools-0.6-5
 - cosmetic changes from Giovanni.
 
