@@ -23,6 +23,7 @@ rest=`echo ${line#* }`
 case "$command" in
     start)
 	logger "Starting the umts connection for $sliver"
+	
 	start_umts $sliver;
 	
 	if [[ $? != 0 ]] ; then
@@ -43,6 +44,10 @@ case "$command" in
     add)
 	logger "Request to add a destination by $sliver for the UMTS connection";	
 	
+	if ! check_sliceip; then
+	   exit 1
+	fi
+	
 	if ! valid_dotted_quad "$rest"; then
 		echo "Failed"
 	else
@@ -58,6 +63,10 @@ case "$command" in
 
     del)
 	logger "Request to del a destination by $sliver for the UMTS connection";
+    	
+    	if ! check_sliceip; then
+	   exit 1
+	fi
     	
 	if ! valid_dotted_quad "$rest"; then
 		echo "Failed"

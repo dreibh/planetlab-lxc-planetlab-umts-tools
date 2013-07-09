@@ -29,6 +29,7 @@ function init_umts(){
 		rmdir $LOCK_DIR
 	fi
 
+	# the routing table is now managed by sliceip
 	#if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
 	#	echo "20 umts_table" >> /etc/iproute2/rt_tables
 	#fi
@@ -50,24 +51,23 @@ function conn_on(){
 	#DESTS_FILE contains added destinations
 	rm -f $DESTS_FILE 
 
-	set_temp_nid $sliver_nid
-	set_routes $sliver
-
 	cat $LOGF | grep "local"
 	return 0
 
 }
 
-#called when the connection is terminated
+#called when the connection is terminated to remove the rules
+#on the destinations reachable thorugh the UMTS device
 function conn_off(){
 	local sliver=$1
 	local ppp_addr=$2
 
-	unset_routes $sliver $ppp_addr
+# Not needed anymore as the killing of the PPP connection
+# makes the rules pointing to it automatically disappear.
 
-	for i in `cat $DESTS_FILE`; do
-		del_destination $i $sliver > /dev/null 2>&1
-	done
+#	for i in `cat $DESTS_FILE`; do
+#		del_destination $i $sliver > /dev/null 2>&1
+#	done
 
 	rm $DESTS_FILE >/dev/null 2>&1
 }
@@ -75,10 +75,6 @@ function conn_off(){
 function start_umts(){
     local sliver=$1
     local sliver_nid=`get_nid $sliver`
-
-    if ! grep "umts_table" /etc/iproute2/rt_tables > /dev/null 2>&1; then
-	echo "20 umts_table" >> /etc/iproute2/rt_tables
-    fi
 
     if ! lock $sliver; then
 	return 1
@@ -139,6 +135,8 @@ function start_umts(){
 }
 
 
+# stop the UMTS connection by killing the pppd daemon and
+# then by calling conn_off
 function stop_umts(){
     local sliver=$1
     local sliver_nid=`get_nid $sliver`
@@ -158,8 +156,8 @@ function stop_umts(){
     PID=`cat $PPPD_PIDFILE`;
 
     if [ -d /proc/$PID ] &&  grep $PPPD /proc/$PID/cmdline >/dev/null 2>&1; then 	
-	kill $PID;	touch $DESTS_FILE
-
+	kill $PID;	
+	touch $DESTS_FILE
 	sleep 2s;
     fi
 
@@ -174,7 +172,8 @@ function stop_umts(){
     fi
 }
 
-
+# check the status of the umts connection by looking at then
+# state of pppd daemon
 function status_umts(){
     local sliver=$1
 	
@@ -205,66 +204,32 @@ function get_nid(){
     id -u ${1}
 }
 
-function set_routes(){
-	local sliver=$1
-	local sliver_nid=`get_nid $sliver`
-	local temp_nid=`get_temp_nid`
-	local ppp_addr=`get_ppp_address`
 
-	#Asks VNET+ to tag all the packets with the respective sliver id
-	iptables -t mangle -A OUTPUT -j MARK --copy-xid 0x00
-
-	#Changes the netfilter mark of packets to trigger rerouting. 
-	#We need to change the mark because the kernel triggers the rerouting process only
-	#if it sees that the netfilter mark has been altered in the mangle iptables chain
-	iptables -t mangle -A OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-
-	#Adds an SNAT rule to set the source IP address of packets that are about to go out through the UMTS
-	#interface. The kernel sets the source address of packets when the first routing process happens
-	#so, without this rule, packets would have the source ip address set on the first routing process of the ethernet interface
-	iptables -t nat -A POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
-	
-	#Restores the original netfilter mark for planetflow
-	iptables -t mangle -I POSTROUTING 1 -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
-
-	#Forbids other slices to use the UMTS interface
-	iptables -t mangle -I POSTROUTING 2 -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
-	
-	#Enables the explicit bind to the UMTS interface. Applications launched by the user in the slice that is using the UMTS and that
-	#bind to the UMTS interface will have packets going out through the UMTS interface 
-	ip route flush table umts_table >/dev/null 2>&1 
-	ip rule add from $ppp_addr fwmark $temp_nid table umts_table >/dev/null 2>&1
-	ip route add default dev $PPP_INT src $ppp_addr table umts_table >/dev/null 2>&1
-	ip route flush cache  >/dev/null 2>&1
+# check if sliceip is activated for the slice
+function check_sliceip(){
+  
+  if ! [ -e /vsys/sliceip ]; then
+    echo "Sliceip is not installed. Exiting."
+    return 1
+  fi
+  
 }
 
-function unset_routes(){
-	local sliver=$1
-	local ppp_addr=$2
-	local sliver_nid=`get_nid $sliver`
-	local temp_nid=`get_temp_nid`
-	
+# Deliver a command to sliceip (basically to set the destinations to be
+# reached through the UMTS device)
+function sliceip_cmd(){
 
-	#removing the rules for changing the mark and the rules for SNAT 
-	iptables -t mangle -D OUTPUT -j MARK --copy-xid 0x00
-	iptables -t mangle -D OUTPUT -m mark --mark $sliver_nid -j MARK --set-mark $temp_nid
-	iptables -t nat -D POSTROUTING -o $PPP_INT -j SNAT --to-source $ppp_addr
-	iptables -t mangle -D POSTROUTING -m mark --mark $temp_nid -j MARK --set-mark $sliver_nid
-
-	iptables -t mangle -D POSTROUTING -o $PPP_INT -m mark ! --mark $sliver_nid -j DROP
-
-	#disable the explicit bind to the ppp interface
-	ip rule del from $ppp_addr fwmark $temp_nid table umts_table  >/dev/null 2>&1
-	ip route del default dev $PPP_INT  src $ppp_addr table umts_table >/dev/null 2>&1
-	ip route flush cache  >/dev/null 2>&1
-
+  local command=$2
+  local sliver=$1
+  
+  echo "$command" | /vsys/sliceip $sliver
+  
 }
 
+# Add a destination to be reached through the UMTS device
 function add_destination(){
 	local dest="$1"
 	local sliver=$2
-	local sliver_nid=`get_nid $sliver`
-	local temp_nid=`get_temp_nid`
 
 	if [[ ! $dest ]]; then return 1; fi
 
@@ -276,44 +241,28 @@ function add_destination(){
 		return 1;
 	fi
 
-	if ip rule add to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
-		echo "$dest" >> $DESTS_FILE
-		return 0
-	else 
-		return 1	
-	fi
-	ip route flush cache  >/dev/null 2>&1
+	sliceip_cmd $sliver "route add $dest dev ${PPP_INT}"	
+	  
 }
 
+# Delete a destination that was previously reached through the UMTS device.
 function del_destination(){
 	local dest="$1"
 	local sliver=$2
-	local sliver_nid=`get_nid $sliver`
-	local temp_nid=`get_temp_nid`
-
+	
 	if [[ ! $dest ]]; then return 1; fi
 
 	if ! check_who_locked $sliver; then
 		return 1;
 	fi
 
-	if ip rule del to "$dest" fwmark $temp_nid table umts_table >/dev/null 2>&1; then
-		return 0;
-	else 
-		return 1;
-	fi
-	ip route flush cache  >/dev/null 2>&1
+	sliceip_cmd $sliver "route del $dest dev ${PPP_INT}";
+
 }
 
 
 function get_ppp_address(){
 	ifconfig $PPP_INT | grep inet\ addr | cut -d ":" -f 2 | cut -d " " -f 1
-}
-
-function set_temp_nid(){
-	local sliver_nid=$1
-	local temp_nid=$((0x20000+$sliver_nid))
-	echo $temp_nid > $FILE_TEMP_NID
 }
 
 
@@ -335,6 +284,7 @@ function check_who_locked(){
 
 }
 
+# kill the gcom daemon
 function kill_gcom(){
 	
 	killall $GCOMP
@@ -355,9 +305,11 @@ function kill_gcom(){
 	fi
 }
 
+# lock the umts connection to a specific sliver.
+# only one sliver at a given time can use the UMTS device
 function lock(){
 	local sliver=$1
-	local sliver_nid=`get_nid $sliver`
+# 	local sliver_nid=`get_nid $sliver`
 	local ret=0
 
 	if [ -e $LOCK_DIR ]; then
@@ -398,7 +350,7 @@ function unlock(){
 
 
 
-# checks ip addresses  
+# checks an ip addresse for validity
 function valid_dotted_quad(){
     oldIFS=$IFS
     IFS=.

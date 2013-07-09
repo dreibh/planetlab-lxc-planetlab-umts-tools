@@ -1,3 +1,8 @@
+0.7
+
+* Support for LXC containers.
+* Removed support for (old) vserver-based PlanetLab code.
+
 0.6 - Giovanni Di Stasi <giovanni.distasi@unina.it>
 
 * More than a sliver allowed to use the umts interface (one at a time)
