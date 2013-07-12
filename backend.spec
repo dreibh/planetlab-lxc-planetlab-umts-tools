@@ -46,7 +46,6 @@ sleep 1
 #/bin/sleep 2
 #/sbin/chkconfig umts on
 /sbin/service vsys restart
-/etc/rc.d/init.d/umts start
 
 %preun
 #/sbin/chkconfig umts off
@@ -55,8 +54,6 @@ sleep 1
 /vsys/umtsd
 /usr/lib/umts_functions
 /etc/udev/rules.d/96-umts-tools.rules
-/etc/rc.d/init.d/umts
-
 
 %defattr(-,root,root)
 %doc AUTHORS TODO
