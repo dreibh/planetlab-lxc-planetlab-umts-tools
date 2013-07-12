@@ -5,25 +5,23 @@ NODE CONFIGURATION
 This guide explains how to setup a Onelab node to support a 3G
 umts/hsdpa interface.
 
-First, you have to add your  node to the nodegroup "umts" [1]. In this
-way the  host environment  of the  node will get  the tools  needed to
-manage the  3G umts/hsdpa  interface. Then, you  have to add  the vsys
-attribute to the slivers you want to grant the access to the umts/hsdpa
-interface.  The value  of this  attribute ("vsys")  has to  be  set to
-"umtsd"
+With the OneLab distribution, you need to add 'umts' to the
+'extensions' tag of your node; this tag contains a space-separated
+list of software extensions to be installed on a node, so that your
+nodes has the tools needed to manage the 3G umts/hsdpa interface. This
+needs to be done before you install your node.  Note that with the lxc
+distribution this code now is shipped on all nodes so there is no need
+anymore to deal with the 'extensions' tag.
+
+Then, the slivers (or slices) you want to grant access to the
+umts/hsdpa interface need to have a 'vsys' tag named 'umtsd'.
 
 Please read README.user for further explanations on how the 3G
 umts/hsdpa interface is supported.
-
-
-[1] At the moment this can only be done by calling the
-PlanetLab/Onelab APIs; however we provided a python script (called
-add_to_nodegroup.py) that can be used to do this operation automatically.
 
 ========================================================================
 SUPPORTED CARDS
 
 At present the Globetrotter 3G/HSDPA and the Huawei e620 are
-supported. Any other card supported by the nozomi driver should work as 
-well.
-
+supported. Any other card supported by the nozomi driver should work
+as well.
