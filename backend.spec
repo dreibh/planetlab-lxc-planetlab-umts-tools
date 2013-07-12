@@ -30,9 +30,11 @@ rm -rf $RPM_BUILD_ROOT
 
 %install
 rm -rf $RPM_BUILD_ROOT
+pushd backend
 mkdir -p $RPM_BUILD_ROOT
 make clean
 make install prefix=$RPM_BUILD_ROOT
+popd
 
 %clean
 rm -rf $RPM_BUILD_ROOT
