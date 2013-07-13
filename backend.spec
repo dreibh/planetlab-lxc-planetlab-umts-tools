@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-backend
 %define version 0.7
-%define release 0
+%define release 1
 
 Summary: Umts-tools for PlanetLab - backend part
 Name: %{name}
@@ -59,6 +59,9 @@ sleep 1
 %doc AUTHORS TODO
 
 %changelog
+* Sun Jul 14 2013 Thierry Parmentelat <thierry.parmentelat@sophia.inria.fr> - planetlab-umts-tools-0.7-1
+- add support for lxc-based nodes (not suitable for vs-based nodes)
+
 * Mon Jan 24 2011 Thierry Parmentelat <thierry.parmentelat@sophia.inria.fr> - planetlab-umts-tools-0.6-6
 - no semantic change - just fixed specfile for git URL
 

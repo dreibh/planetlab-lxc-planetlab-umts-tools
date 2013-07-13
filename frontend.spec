@@ -2,7 +2,7 @@
 
 %define name planetlab-umts-tools-frontend
 %define version 0.7
-%define release 0
+%define release 1
 
 Summary: UMTS tools for PlanetLab
 Name: %{name}
@@ -49,6 +49,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc AUTHORS VERSION README.User README.PI
 
 %changelog
+* Sun Jul 14 2013 Thierry Parmentelat <thierry.parmentelat@sophia.inria.fr> - planetlab-umts-tools-0.7-1
+- add support for lxc-based nodes (not suitable for vs-based nodes)
+
 * Mon Jan 24 2011 Thierry Parmentelat <thierry.parmentelat@sophia.inria.fr> - planetlab-umts-tools-0.6-6
 - no semantic change - just fixed specfile for git URL
 
